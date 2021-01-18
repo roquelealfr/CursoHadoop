@@ -16,6 +16,14 @@
     * [Comparar otras herramientas frente a Hadoop](#comparar-otras-herramientas-frente-a-hadoop)
     * [Elementos de Hadoop HDFS](#elementos-de-hadoop-hdfs)
     * [Reconocer y diseñar flujo de datos](#reconocer-y-diseñar-flujo-de-datos)
+    * [Aprendiendo sobre los datos en Hadoop](#aprendiendo-sobre-los-datos-en-hadoop)
+    * [YARN](#yarn)
+3. [MapReduce](#mapreduce)
+    * [MapReduce](#mapreduce)
+    * [Comprender el funcionamiento de MapReduce](#comprender-el-funcionamiento-de-mapreduce)
+    * [Identificar tipos de datos en herramientas de BigData](#identificar-tipos-de-datos-en-herramientas-de-bigdata)
+4. [Operaciones con hadoop](#operaciones-con-hadoop)
+    * [Desarrollar un clúster de Hadoop](#desarrollar-un-clúster-de-hadoop)
 
 ---
 
@@ -241,7 +249,7 @@ sudo docker run --hostname=quickstart.cloudera --privileged=true -it -v $pwd:/sr
 La imagen pesa 4.4GB, así que se demorará en descargar. *No funciona*.
 
 Se trabaja con una herramienta denominada sqoop. Permite que a través de una DB vamos a mover información a nuestro cluster de Hadoop.
-```bash
+```bash 
 sqoop import-all-tables -m 1 --connect jdbc:mysql://quickstart:3306/retail_db --username=retail_dba --password=cloudera --compression-codec=snappy --as-parquetfile --warehouse-dir=/user/hive/warehouse --hive-import
 ```
 * `import-all-tables`: Importa todas las tablas de la DB.
@@ -257,4 +265,362 @@ sqoop import-all-tables -m 1 --connect jdbc:mysql://quickstart:3306/retail_db --
 Ahora, vemos el archivo de configuración.
 ```bash
 hdfs dfs -ls /user/hive/warehouse/
+
+Found 6 items
+drwxrwxrwx   - root supergroup          0 2021-01-17 17:42 /user/hive/warehouse/categories
+drwxrwxrwx   - root supergroup          0 2021-01-17 17:43 /user/hive/warehouse/customers
+drwxrwxrwx   - root supergroup          0 2021-01-17 17:45 /user/hive/warehouse/departments
+drwxrwxrwx   - root supergroup          0 2021-01-17 17:46 /user/hive/warehouse/order_items
+drwxrwxrwx   - root supergroup          0 2021-01-17 17:47 /user/hive/warehouse/orders
+drwxrwxrwx   - root supergroup          0 2021-01-17 17:49 /user/hive/warehouse/products
 ```
+Si vemos una tabla nos mostrará los archivos que esta contiene, por supuesto, lo que vemos en consola son carpetas, así que si accedemos a ella podremos ver la metadata y el archivo parquet que contiene la información de la tabla.
+```bash
+hdfs dfs -ls /user/hive/warehouse/categories
+Found 3 items
+drwxr-xr-x   - root supergroup          0 2021-01-17 17:41 /user/hive/warehouse/categories/.metadata
+drwxr-xr-x   - root supergroup          0 2021-01-17 17:42 /user/hive/warehouse/categories/.signals
+-rw-r--r--   1 root supergroup       1956 2021-01-17 17:42 /user/hive/warehouse/categories/b6ec217b-98dc-4d82-bd25-b1eeb85f6871.parquet
+```
+Ingresamos a la plataforma de HUE, localhost:8888.
+
+![HUE](/images/hue.png)
+
+user: cloudera - pass: cloudera
+
+Entramos al servicio de impala y corremos los siguientes comandos.
+```
+invalidate metadata;
+
+show tables;
+
+ 	name
+1	categories
+2	customers
+3	departments
+4	order_items
+5	orders
+6	products
+```
+Y ahora, utilizamos una consulta SQL para ver las 10 categorías más usadas en la DB.
+```bash
+select c.category_name, count(order_item_quantity) as count
+from order_items oi
+inner join products p on 
+oi.order_item_product_id = p.product_id
+inner join categories c on c.category_id = p.product_category_id
+group by c.category_name
+order by count desc
+limit 10;
+
+ 	category_name	        count
+1	Cleats	                24551
+2	Men's Footwear	        22246
+3	Women's Apparel	        21035
+4	Indoor/Outdoor Games	19298
+5	Fishing	                17325
+6	Water Sports	        15540
+7	Camping & Hiking	    13729
+8	Cardio Equipment	    12487
+9	Shop By Sport	        10984
+10	Electronics	            3156
+```
+
+Lo que hicimos fue Tener una DB SQL, moverla hacia una entorno de Hadoop, se comprimió esta DB y lo que se obtuvo fue un resultado de las categorías.
+
+Del lado izquierdo de la plataforma de Hadoop podemos ver las tablas, podemos ver que están comprimidos en una versión de snappy y están guardados dentro del ambiente HDFS, cada uno redujo su tamaño para optimizar los recursos que se estén utilizando.
+
+![Plataforma](/images/platform.png)
+
+## Aprendiendo sobre los datos en Hadoop
+
+Formatos de datos que podemos utilizar en Hadoop.
+
+* Se genera una red:
+```
+sudo docker network create --driver=bridge hadoop
+```
+Para esta clase se tiene una serie de datos preparados en la [siguiente carpeta](/code/curso-hadoop-platzi/2_Aprendiendo_sobre_los_datos_en_hadoop).
+* Levantamos nuestro ambiente.
+    ```
+    sudo ./start-container.sh
+    ```
+* En otra terminal nos dirigimos a la [documentación del repo](/code/curso-hadoop-platzi/2_Aprendiendo_sobre_los_datos_en_hadoop/README.md) y descargamos los libros.
+    ```bash
+    wget -b https://raw.githubusercontent.com/terranigmark/curso-hadoop-platzi/2_Aprendiendo_sobre_los_datos_en_hadoop/2_Aprendiendo_sobre_los_datos_en_hadoop/books/Alices_adventures.txt
+    wget -b https://raw.githubusercontent.com/terranigmark/curso-hadoop-platzi/2_Aprendiendo_sobre_los_datos_en_hadoop/2_Aprendiendo_sobre_los_datos_en_hadoop/books/SYMBOLIC_LOGIC.txt
+    wget -b https://raw.githubusercontent.com/terranigmark/curso-hadoop-platzi/2_Aprendiendo_sobre_los_datos_en_hadoop/2_Aprendiendo_sobre_los_datos_en_hadoop/books/the_hunting_of_snark.txt
+    ```
+* Dentro del ambiente de hadoop se crea otro directorio y se pegan los comandos para descargar los libros.
+    ```
+    mkdir input
+
+    wget....
+
+    ls -la
+    total 648
+    drwxr-xr-x 2 root root   4096 Jan 18 03:13 .
+    drwx------ 1 root root   4096 Jan 18 03:13 ..
+    -rw-r--r-- 1 root root 107595 Jan 18 03:13 Alices_adventures.txt
+    -rw-r--r-- 1 root root 474438 Jan 18 03:13 SYMBOLIC_LOGIC.txt
+    -rw-r--r-- 1 root root  54270 Jan 18 03:13 the_hunting_of_snark.txt
+    -rw-r--r-- 1 root root    813 Jan 18 03:13 wget-log
+    -rw-r--r-- 1 root root   1336 Jan 18 03:13 wget-log.1
+    -rw-r--r-- 1 root root    742 Jan 18 03:13 wget-log.2
+    ```
+* Borramos los logs.
+    ```
+    rm -f wget*
+    ls -la
+    total 636
+    drwxr-xr-x 2 root root   4096 Jan 18 03:14 .
+    drwx------ 1 root root   4096 Jan 18 03:13 ..
+    -rw-r--r-- 1 root root 107595 Jan 18 03:13 Alices_adventures.txt
+    -rw-r--r-- 1 root root 474438 Jan 18 03:13 SYMBOLIC_LOGIC.txt
+    -rw-r--r-- 1 root root  54270 Jan 18 03:13 the_hunting_of_snark.txt
+    ```
+* volvemos a la carpeta anterior y se comprime mediante el algoritmo de tar.
+    ```
+    tar -czvf input lewis.tar.gz input/*
+
+    input/Alices_adventures.txt
+    input/SYMBOLIC_LOGIC.txt
+    input/input
+    input/the_hunting_of_snark.txt
+    ```
+    * c: Generar el archivo.
+    * z: Comprime el archivo.
+    * v: visualizarlo.
+    * f: Darle nombre y ubicación.
+* Se crea un directorio en el entorno de hadoop.
+    ```
+    hdfs dfs mkdir -p test
+
+    hdfs dfs -ls
+    ```
+* ubicamos el archivo comprimido dentro de Hadoop.
+    ```
+    hdfs dfs -put input/lewis.tar.gz
+    ```
+* Si se lista se puede observar que quedó fuera de la carpeta input, se mueve a esta carpeta.
+    ```
+    hdfs dfs -mv lewis.tar.gz input
+    ```
+* Se ejecuta el siguiente comando para que se genere un job para que lea el archivo comprimido.
+    ```
+    hadoop jar $HADOOP_HOME/share/hadoop/mapreduce/sources/hadoop-mapreduce-examples-2.7.2-source.jar org.apache.hadoop.examples.WordCount input output
+    ```
+* Se ejecutó una tarea de mapreduce. Se listan los archivos de la carpeta output que se generó y se observan 2. El log que se generó muestra una lista de las palabras que están en el documento y la cantidad de veces que se repite en el documento.
+
+## YARN
+
+Yarn (Yet Another Resource Negotiator) es una pieza fundamental en el ecosistema Hadoop. Es el framework que permite a Hadoop soportar varios motores de ejecución incluyendo MapReduce, y proporciona un planificador agnóstico a los trabajos que se encuentran en ejecución en el clúster. Esta mejora de Hadoop también es conocida como Hadoop 2.
+
+Yarn separa las dos funcionalidades principales: la gestión de recursos y la planificación y monitorización de trabajos. Con esta idea, es posible tener un gestor global (Resource Manager) y un Application Master por cada aplicación.
+
+![YARN](/images/yarn.png)
+
+Permite crear la arquitectura de la solución mediante este clúster de herramientas. Va a estar debajo del ecosistema de Hadoop y va a estar negociando las recursos de acuerdo a las capacidades de nuestro sistema. En este sentido es HDFS otras herramientas que se van a explorar en el curso.
+
+# MapReduce
+
+## MapReduce
+
+MapReduce es un marco con la que podemos escribir aplicaciones para procesar grandes cantidades de datos, paralelamente, en grandes grupos de componentes de hardware de manera confiable.
+
+El algoritmo MapReduce contiene dos tareas importantes, a saber Mapa y reducir. Mapa toma un conjunto de datos y se convierte en otro conjunto de datos, en el que los elementos se dividen en tuplas (pares clave/valor). En segundo lugar, reducir tarea, que toma la salida de un mapa como entrada y combina los datos tuplas en un conjunto más pequeño de tuplas. Como la secuencia de MapReduce el nombre implica, la reducción se realiza siempre después de que el mapa.
+
+Este framework se puede explorar desde diferentes estructuras, como tal podemos levantar trabajos o estructuras con MapReduce y configurarlos.
+
+![MapReduce](/images/mapreduce.png)
+
+* Input: Es la entrada de la información.
+* Splitting: Separa la información, en una arquitectura generalmente se configuran varios parámetros para separar nuestros datos. Por ejemplo, en un PB podemos separarlos en GB, MB, etc. para poder analizar estas fracciones de datos o en su conjunto.
+* Mapping: Identifica elementos y los empieza a agrupar y a contar.
+* Shuffling Sort: Organiza la información, estos parámetros se determinan cuando se define la estructura.
+* Reducing: Reduce la información, en este caso, agrupó las palabras Big y data puesto que se repiten.
+* Final Result: Podemos analizar bloques de información.
+
+## Comprender el funcionamiento de MapReduce
+
+* Paradigma MapReduce por lo general se basa en enviar el ordenador a donde residen los datos.
+* MapReduce programa se ejecuta en tres etapas, a saber: mapa etapa, shuffle, y reducir.
+    * Mapa etapa : El mapa o mapa de trabajo es la de procesar los datos de entrada. Por lo general, los datos de entrada se encuentra en la forma de archivo o directorio y se almacena en el sistema de archivos Hadoop (HDFS). El archivo de entrada se pasa a la función mapa línea por línea. El mapper procesa los datos y crea varios pequeños fragmentos de datos.
+    * Reducir etapa: Esta etapa es la combinación de la reproducción aleatoria y la etapa Reducir. La pieza de trabajo es la de procesar los datos que llegan desde el mapa. Después de un proceso de elaboración, se genera un nuevo conjunto de la producción, que se almacena en el HDFS.
+* Durante el trabajo, Hadoop MapReduce envía el mapa y reducir las tareas a los servidores correspondientes en el clúster.
+* El marco de trabajo administra todos los detalles de los datos de tareas tales como la emisión, verificar la realización de las tareas, y copia de los datos en todo el clúster entre los nodos.
+* La mayoría de los informáticos se lleva a cabo en los nodos de datos en los discos locales que reduce el tráfico de la red.
+* Tras la finalización de las tareas asignadas, el grupo recopila y disminución de los datos que forman un resultado adecuado y lo envía de vuelta al servidor Hadoop.
+
+### Cómo ejecutarlo en la terminal
+
+* Nos dirigimos a la carpeta de trabajo [MapReduce](/code/curso-hadoop-platzi/3_MapReduce) e iniciamos los contenedores.
+    ```
+    sudo ./start-container.sh
+    ```
+* Levantamos la configuración de Hadoop.
+    ```
+    ./start-hadoop.sh
+    ```
+* Revisamos la versión de Hadoop y la de Java, ¿Por qué Java? Porque Hadoop es una tecnología que se desarrollo con Java.
+    ```
+    hadoop version
+    Hadoop 2.7.2
+    Subversion Unknown -r Unknown
+    Compiled by root on 2016-05-27T18:05Z
+    Compiled with protoc 2.5.0
+    From source with checksum d0fda26633fa762bff87ec759ebe689c
+    This command was run using /usr/local/hadoop/share/hadoop/common/hadoop-common-2.7.2.jar
+
+    javac -version
+    javac 1.7.0_201
+    ```
+* Generamos el arhivo WordCount de Java, cuyó código está en la [documentación de la carpeta](/code/curso-hadoop-platzi/3_MapReduce/README.md).
+```java
+import java.io.IOException;
+import java.util.StringTokenizer;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.Mapper;
+import org.apache.hadoop.mapreduce.Reducer;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+
+public class WordCount {
+
+  public static class TokenizerMapper
+       extends Mapper<Object, Text, Text, IntWritable>{
+
+    private final static IntWritable one = new IntWritable(1);
+    private Text word = new Text();
+
+    public void map(Object key, Text value, Context context
+                    ) throws IOException, InterruptedException {
+      StringTokenizer itr = new StringTokenizer(value.toString());
+      while (itr.hasMoreTokens()) {
+        word.set(itr.nextToken());
+        context.write(word, one);
+      }
+    }
+  }
+
+  public static class IntSumReducer
+       extends Reducer<Text,IntWritable,Text,IntWritable> {
+    private IntWritable result = new IntWritable();
+
+    public void reduce(Text key, Iterable<IntWritable> values,
+                       Context context
+                       ) throws IOException, InterruptedException {
+      int sum = 0;
+      for (IntWritable val : values) {
+        sum += val.get();
+      }
+      result.set(sum);
+      context.write(key, result);
+    }
+  }
+
+  public static void main(String[] args) throws Exception {
+    Configuration conf = new Configuration();
+    Job job = Job.getInstance(conf, "word count");
+    job.setJarByClass(WordCount.class);
+    job.setMapperClass(TokenizerMapper.class);
+    job.setCombinerClass(IntSumReducer.class);
+    job.setReducerClass(IntSumReducer.class);
+    job.setOutputKeyClass(Text.class);
+    job.setOutputValueClass(IntWritable.class);
+    FileInputFormat.addInputPath(job, new Path(args[0]));
+    FileOutputFormat.setOutputPath(job, new Path(args[1]));
+    System.exit(job.waitForCompletion(true) ? 0 : 1);
+  }
+}
+```
+* en la terminal de Hadoop realizamos un update, e instalamos nano.
+```
+apt update
+
+apt install nano
+```
+* Creamos el archivo WorkCount.java, lo abrimos, pegamos el código de java y guardamos el documento.
+```
+nano WordCount.java
+
+# Clic derecho, pegar, CTRL + X para salir, Y para confirmar guardar el documento.
+```
+* Se crea un directorio 'input_file' y dentro de este se crea un documento con un texto cualquiera.
+```
+root@hadoop-master:~# mkdir input_file
+root@hadoop-master:~# echo "Hola mundo desde mapreduce" > input_file/input.txt
+```
+* Ahora, dentro del ambiente de Hadoop se crea una carpeta para mover el input y correr la configuración de java para mapreduce.
+```
+oot@hadoop-master:~# hdfs dfs -mkdir /WordCountTutorial      
+root@hadoop-master:~# hdfs dfs -mkdir /WordCountTutorial/Input
+root@hadoop-master:~# hdfs dfs -put input_file/input.txt /WordCountTutorial/Input
+hdroot@hadoop-master:~# hdfs dfs -ls /WordCountTutorial/Input
+Found 1 items
+-rw-r--r--   2 root supergroup         27 2021-01-18 04:20 /WordCountTutorial/Input/input.txt
+```
+* Creamos las clases para configurar el archivo de Java y correr el job dentro de mapreduce. Primero crearemos la carpeta de las clases, luego exportamos lasvariables de ambiente, las cuales nos van a permitir ejecutar nuestro archivo de configuración de Java. Luego se crea las clases de ambiente. Se crea un archivo jar `wc.jar` y se ejecuta alrededor del algoritmo de MapReduce.
+```bash
+mkdir tutorial_classes
+
+# Creación de variables de ambiente.
+root@hadoop-master:~# export JAVA_HOME=/usr/java/default
+root@hadoop-master:~# export PATH=${JAVA_HOME}/bin:${PATH}
+root@hadoop-master:~# export HADOOP_CLASSPATH=/usr/lib/jvm/java-7-openjdk-amd64/lib/tools.jar
+
+# Creación de las clases de ambiente.
+hadoop com.sun.tools.javac.Main WordCount.java
+# Se revisan que existen. Son las extensiones .class
+root@hadoop-master:~# ls -la
+total 68
+drwx------ 1 root root 4096 Jan 18 04:30 .
+drwxr-xr-x 1 root root 4096 Jan 18 04:06 ..
+-rw-r--r-- 1 root root 3106 Feb 20  2014 .bashrc
+drwx------ 2 root root 4096 Jan 18 04:07 .cache
+-rw-r--r-- 1 root root  140 Feb 20  2014 .profile
+drwx------ 1 root root 4096 Jan 18 04:07 .ssh
+-rw-r--r-- 1 root root 1739 Jan 18 04:30 WordCount$IntSumReducer.class
+-rw-r--r-- 1 root root 1736 Jan 18 04:30 WordCount$TokenizerMapper.class
+-rw-r--r-- 1 root root 1501 Jan 18 04:30 WordCount.class
+-rw-r--r-- 1 root root 2089 Jan 18 04:14 WordCount.java
+drwxr-xr-x 1 root root 4096 Jun  5  2020 hdfs
+drwxr-xr-x 2 root root 4096 Jan 18 04:17 input_file
+-rwxr-xr-x 1 root root  695 Jun  1  2020 run-wordcount.sh
+-rwxr-xr-x 1 root root  120 Jun  1  2020 start-hadoop.sh
+drwxr-xr-x 2 root root 4096 Jan 18 04:21 tutorial_classes
+
+# creamos el archivo wc.jar
+jar cf wc.jar WordCount*.class
+
+# Ejecutamos el contador de palabras alrededor del algoritmo de MapReduce.
+hadoop jar $PWD/wc.jar WordCount /WordCountTutorial/Input /WordCountTutorial/Output
+```
+Una vez que el job terminó se puede observar que es similar al obtenido en la clase anterior, sin embargo, la diferencia es que aquí se corrió nuestro propio contador de palabras y en este caso el algoritmo de MapReduce terminó de ejecutarse.
+
+Se revisa el resultado final.
+```
+hdfs dfs -cat /WordCountTutorial/Output/part-r-00000
+Hola	    1
+desde	    1
+mapreduce	1
+mundo	    1
+```
+
+[Documentación: MapReduce Tutorial](https://hadoop.apache.org/docs/r1.2.1/mapred_tutorial.html)
+
+## Identificar tipos de datos en herramientas de BigData
+
+![Datos](/images/datos.png)
+
+En Hadoop podemos usar diferentes tipos de datos, Json es el más popular, sin embargo, podemos usar archivos ya específicos para clusters o para big data, estos permite comprimir a altas cantidades de Bytes para nuestros archivos, destacan Avro y Parquet. Son archivos que podemos manejar dentro de nuestro ambiente HDFS.
+
+# Operaciones con hadoop
+
+## Desarrollar un clúster de Hadoop
+

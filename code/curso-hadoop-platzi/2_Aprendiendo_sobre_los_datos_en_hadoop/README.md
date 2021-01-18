@@ -7,7 +7,6 @@ sudo docker network create --driver=bridge hadoop
 ##### 2. Inicializar el cluster
 
 ```
-cd hadoop
 sudo ./start-container.sh
 ```
 
@@ -31,19 +30,26 @@ root@hadoop-master:~#
 ##### 4. Un archivo txt de un libro
 
 ```
-wget https://raw.githubusercontent.com/uracilo/testdata/master/odisea.txt
+
+wget -b https://raw.githubusercontent.com/terranigmark/curso-hadoop-platzi/2_Aprendiendo_sobre_los_datos_en_hadoop/2_Aprendiendo_sobre_los_datos_en_hadoop/books/Alices_adventures.txt
+wget -b https://raw.githubusercontent.com/terranigmark/curso-hadoop-platzi/2_Aprendiendo_sobre_los_datos_en_hadoop/2_Aprendiendo_sobre_los_datos_en_hadoop/books/SYMBOLIC_LOGIC.txt
+wget -b https://raw.githubusercontent.com/terranigmark/curso-hadoop-platzi/2_Aprendiendo_sobre_los_datos_en_hadoop/2_Aprendiendo_sobre_los_datos_en_hadoop/books/the_hunting_of_snark.txt
+
+
+rm -rf wget*
 ```
 
 ##### 5. Crear un directorio
 
 ```
 mkdir input
+
 ```
 
 ##### 6. Crear un archivo tipo tar.gz
 
 ```
-tar -czvf input/odisea.tar.gz odisea.txt
+tar -czvf input/lewis.tar.gz *
 ```
 
 -c: Generar archivo
@@ -61,7 +67,10 @@ ls -flarts input
 
 ```
 hdfs dfs -mkdir -p test
-hdfs dfs -put input
+hdfs dfs -mkdir -p input
+hdfs dfs -put input/lewis.tar.gz
+hdfs dfs -mv lewis.tar.gz input
+hdfs dfs -ls 
 ```
 
 ##### 9. Revisar nuestro input directorio en HADOOP
